@@ -14,7 +14,7 @@ def test_parser():
 
     #берем первый файл для теста
     test_file = pdf_files[0]
-    print(f"📄 Тестируем файл: {test_file.name}")
+    print(f"Тестируем файл: {test_file.name}")
 
     #инициализируем наш парсер
     parser = PDFParser(chunk_size=500, chunk_overlap=50)

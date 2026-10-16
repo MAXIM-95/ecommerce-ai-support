@@ -1,6 +1,8 @@
 from pathlib import Path
-from pypdf import PdfReader
+import pymupdf as fitz
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from typing import List, Dict, Any
+
 
 class PDFParser:
     #инициализируем парсер. Здесь chunk_size - максимальный размер чанка в символах, 
@@ -13,32 +15,50 @@ class PDFParser:
         )
 
     #функция извлечения всего текста из PDF-файла
-    def extract_text_from_pdf(self, pdf_path: str | Path) -> str:
-        reader = PdfReader(pdf_path)
-        full_text = ""
-        for page in reader.pages:
-            text = page.extract_text()
-            if text:
-                full_text += f"\n{text}"
-        return full_text
+    #def extract_text_from_pdf(self, pdf_path: str | Path) -> str:
+    #    reader = PdfReader(pdf_path)
+    #    full_text = ""
+    #    for page in reader.pages:
+    #        text = page.extract_text()
+    #        if text:
+    #            full_text += f"\n{text}"
+    #    return full_text
 
     #Читает PDF, извлекает текст и разбивает его на чанки с сохранением метаданных
-    def process_pdf(self, pdf_path: str | Path) -> list[dict]:
-        path = Path(pdf_path)
-        if not path.exists():
-            raise FileNotFoundError(f"Файл не найден: {path}")
+    def process_pdf(self, file_path: Path) -> List[Dict[str, Any]]:
+        # Открываем PDF через PyMuPDF
+        doc = fitz.open(file_path) 
+        full_text = ""
 
-        raw_text = self.extract_text_from_pdf(path)
-        chunks = self.text_splitter.split_text(raw_text)
+        #Постраничное извлечение текста
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            text = page.get_text("text")  #извлекает текст в обычном текстовом виде
+            if text:
+                full_text += f"\n{text}"
         
+        #Проверка на случай, если внутри документа пусто (например, сканы без текста)
+        if not full_text.strip():
+            print(f"Внимание: в файле {file_path.name} не удалось извлечь текст (возможно, нужна OCR).")
+            return []
+
+        #Нарезка текста с помощью LangChain
+        chunks = self.text_splitter.create_documents( #в chunks будет список объектов класса Documents из LangChain
+            texts=[full_text],
+            metadatas=[{"source": file_path.name}]
+        )
+
+        #Преобразование объектов LangChain в удобный формат словарей с ID
         processed_chunks = []
         for i, chunk in enumerate(chunks):
             processed_chunks.append({
                 "content": chunk,
                 "metadata": {
-                    "source": path.name,
+                    "source": file_path.name,
                     "chunk_id": i
                 }
             })
             
         return processed_chunks
+
+    
