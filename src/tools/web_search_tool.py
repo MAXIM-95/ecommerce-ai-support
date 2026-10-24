@@ -4,6 +4,14 @@ from duckduckgo_search import DDGS
 #Скрипт будет использоваться тогда, когда информации нет в локальных инструкциях/базе знаний,
 #а также, если пользователь прямо просит найти информацию в интернете.
 def web_search(query: str) -> str:
+    """Выполняет поиск в интернете по внешним источникам и сайтам.
+    
+    Скрипт будет использоваться тогда, когда информации нет в локальных инструкциях/базе знаний,
+    а также, если пользователь прямо просит найти информацию в интернете.
+    
+    Args:
+        query: Текст поискового запроса для интернета.
+    """
    
     try:
         results = list(DDGS().text(query, max_results=3))
@@ -11,10 +19,10 @@ def web_search(query: str) -> str:
             return "В интернете не удалось найти информацию по данному запросу."
 
         formatted_results = []
-        for i, res in enumerate(results, 1):
-            title = res.get("title", "")
-            snippet = res.get("body", "")
-            url = res.get("href", "")
+        for i, res in enumerate(results, 1): #пробегаемся по каждому найденному сайту
+            title = res.get("title", "") #извлекаем заголовок статьи
+            snippet = res.get("body", "") #сниппет
+            url = res.get("href", "") #прямая ссылка на сайт
             formatted_results.append(f"--- Результат из веб-поиска #{i} ---\nЗаголовок: {title}\nОписание: {snippet}\nСсылка: {url}\n")
 
         return "\n".join(formatted_results)

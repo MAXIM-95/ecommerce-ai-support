@@ -5,6 +5,14 @@ from pathlib import Path
 #Ищет информацию о заказе в базе данных SQLite по номеру заказа (order_id) или email клиента.
 #Возвращает строку с подробной информацией о статусе, товаре и дате доставки.
 def search_order(order_id: str = None, email: str = None) -> str:
+    """Ищет информацию о заказе в базе данных SQLite по номеру заказа (order_id) или email клиента.
+    
+    Возвращает строку с подробной информацией о статусе, товаре и дате доставки.
+    
+    Args:
+        order_id: Уникальный номер заказа (например, ORD-1001).
+        email: Email клиента для поиска заказов.
+    """
 
     db_path = Path("data/orders.db")
     if not db_path.exists():
