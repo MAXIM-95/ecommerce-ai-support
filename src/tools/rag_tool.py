@@ -12,25 +12,25 @@ def get_vector_store() -> VectorStoreManager:
         print("Инициализация и загрузка VectorStoreManager для агента...")
         _vector_store = VectorStoreManager()
         
-        # Автоматически загружаем PDF-инструкции из папки pdfs при первом обращении
-        pdf_dir = Path("data/pdfs")
-        if pdf_dir.exists():
-            pdf_files = list(pdf_dir.glob("*.pdf"))
-            if pdf_files:
-                parser = PDFParser(chunk_size=500, chunk_overlap=50)
-                all_chunks = []
-                for pdf_file in pdf_files:
-                    print(f"Чтение мануала: {pdf_file.name}")
-                    chunks = parser.process_pdf(pdf_file)
-                    all_chunks.extend(chunks)
-                
-                if all_chunks:
-                    _vector_store.add_chunks(all_chunks)
-                    print(f"База знаний успешно проиндексирована! Всего чанков: {len(all_chunks)}")
-            else:
-                print("В папке 'pdfs' не найдены PDF-файлы.")
+        # Проверяем, пустая ли база, и только тогда индексируем PDF
+        count_result = _vector_store.client.count(collection_name=_vector_store.collection_name)
+        if count_result.count == 0:
+            pdf_dir = Path("data/pdfs")
+            if pdf_dir.exists():
+                pdf_files = list(pdf_dir.glob("*.pdf"))
+                if pdf_files:
+                    parser = PDFParser(chunk_size=500, chunk_overlap=50)
+                    all_chunks = []
+                    for pdf_file in pdf_files:
+                        print(f"Чтение мануала: {pdf_file.name}")
+                        chunks = parser.process_pdf(pdf_file)
+                        all_chunks.extend(chunks)
+                    
+                    if all_chunks:
+                        _vector_store.add_chunks(all_chunks)
+                        print(f"База знаний успешно проиндексирована! Всего чанков: {len(all_chunks)}")
         else:
-            print("Папка 'pdfs' не найдена.")
+            print(f"База уже содержит {count_result.count} чанков. Пропускаем повторный парсинг.")
     
     return _vector_store
 
@@ -46,7 +46,7 @@ def search_manuals(query: str) -> str:
     """
 
     store = get_vector_store()
-    results = store.hybrid_search(query, top_k=5, rerank_top_k=3)
+    results = store.hybrid_search(query, top_k=3, rerank_top_k=2)
 
     if not results:
         print(f"DEBUG: По запросу '{query}' ничего не найдено в базе знаний.")

@@ -35,6 +35,40 @@ class VectorStoreManager:
             print(f"Создана новая коллекция Qdrant: {self.collection_name}")
         else:
             print(f"Коллекция {self.collection_name} уже существует.")
+            #Если коллекция уже есть, сразу подтягиваем данные для BM25 из базы
+            self._load_existing_chunks_for_bm25()
+
+
+    def _load_existing_chunks_for_bm25(self):
+        try:
+            # Проверяем, есть ли точки в коллекции
+            count_result = self.client.count(collection_name=self.collection_name)
+            if count_result.count > 0:
+                print(f"Загрузка {count_result.count} чанков из Qdrant для восстановления BM25-индекса...")
+                # Вытягиваем все сохраненные точки из Qdrant
+                records, _ = self.client.scroll(
+                    collection_name=self.collection_name,
+                    limit=count_result.count,
+                    with_payload=True,
+                    with_vectors=False
+                )
+                
+                texts = []
+                metadatas = []
+                for record in records:
+                    payload = record.payload or {}
+                    content = payload.get("content", "")
+                    metadata = {k: v for k, v in payload.items() if k != "content"}
+                    texts.append(content)
+                    metadatas.append(metadata)
+                
+                if texts:
+                    self.all_chunks = [{"content": t, "metadata": m} for t, m in zip(texts, metadatas)]
+                    tokenized_corpus = [doc.lower().split(" ") for doc in texts]
+                    self.bm25 = BM25Okapi(tokenized_corpus)
+                    print("BM25-индекс успешно восстановлен из сохраненной базы!")
+        except Exception as e:
+            print(f"Не удалось автоматически восстановить BM25 из базы: {e}")
 
 
     def add_chunks(self, chunks: List[Any]):
