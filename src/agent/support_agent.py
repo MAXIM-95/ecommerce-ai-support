@@ -1,7 +1,8 @@
 import os
 from dotenv import load_dotenv
 #from langchain_groq import ChatGroq
-from langchain_google_genai import ChatGoogleGenerativeAI
+#from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_ollama import ChatOllama
 from langgraph.prebuilt import create_react_agent
 
 
@@ -23,11 +24,14 @@ if not os.getenv("GOOGLE_API_KEY"):
 #llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
 
 # Инициализируем модель Gemini
-llm = ChatGoogleGenerativeAI(
-    model="gemini-3.8-flash", 
-    temperature=0,
-    google_api_key=os.environ.get("GOOGLE_API_KEY")
-)
+#llm = ChatGoogleGenerativeAI(
+#    model="gemini-3.8-flash", 
+#    temperature=0,
+#    google_api_key=os.environ.get("GOOGLE_API_KEY")
+#)
+
+#Инициализируем модель qwen-2.5
+llm = ChatOllama(model="qwen2.5", temperature=0)
 
 #Объединяем все инструменты в единый список для агента
 tools = [search_order, search_manuals, web_search]
