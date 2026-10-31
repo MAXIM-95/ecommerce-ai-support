@@ -32,43 +32,87 @@ class PDFParser:
         return text.strip()
 
     #Читает PDF, извлекает текст и разбивает его на чанки с сохранением метаданных
+    #
     def process_pdf(self, file_path: Path) -> List[Dict[str, Any]]:
         # Открываем PDF через PyMuPDF
         doc = fitz.open(file_path) 
-        full_text = ""
+        
+        processed_chunks = []
+        current_section = "Общая информация" # дефолтный заголовок, если еще не встретили другой
 
         #Постраничное извлечение текста
         for page_num in range(len(doc)):
             page = doc[page_num]
-            text = page.get_text("text")  #извлекает текст в обычном текстовом виде
-            if text:
-                full_text += f"\n{text}"
-        
-        #Проверка на случай, если внутри документа пусто (например, сканы без текста)
-        if not full_text.strip():
-            print(f"Внимание: в файле {file_path.name} не удалось извлечь текст (возможно, нужна OCR).")
-            return []
+            
+            # Извлекаем текст в виде блоков с деталями шрифтов (dict)
+            blocks = page.get_text("dict")["blocks"]
+            
+            page_text_blocks = []
 
-        #КРИТИЧЕСКИ ВАЖНО: очищаем весь сырой текст от артефактов перед нарезкой
-        cleaned_full_text = self.clean_pdf_text(full_text)
+            #перебираем каждый визуальный блок на странице. 
+            for b in blocks:
+                if "lines" in b:  #текстовый блок -> собираем всю информацию внутри него
+                    block_text = ""
+                    max_font_size = 0.0
+                    is_bold = False
 
-        #Нарезка текста с помощью LangChain
-        chunks = self.text_splitter.create_documents( #в chunks будет список объектов класса Documents из LangChain
-            texts=[cleaned_full_text],
-            metadatas=[{"source": file_path.name}]
-        )
+                    #проходим по каждой строке и каждому кусочку текста и склеиваем их в единую строку блока
+                    for line in b["lines"]: 
+                        for span in line["spans"]:
+                            block_text += span["text"] + " "
+                            if span["size"] > max_font_size:
+                                max_font_size = span["size"]
+                            # Флаг жирного шрифта в PyMuPDF (бит 1). Для того, чтобы понять где заголовок, а где обычный текст
+                            if span["flags"] & 2: 
+                                is_bold = True
 
-        #Преобразование объектов LangChain в удобный формат словарей с ID
-        processed_chunks = []
-        for i, chunk in enumerate(chunks):
-            processed_chunks.append({
-                "content": chunk.page_content, #достаем конкретно саму строку текста из объекта, а не сам ланг чейн объект
-                "metadata": {
-                    "source": file_path.name,
-                    "chunk_id": i
-                }
-            })
+                    block_text = block_text.strip()
+                    if not block_text:
+                        continue
+
+                    # Эвристика определения заголовка: 
+                    # 1) либо крупный/жирный шрифт
+                    # 2) либо текст начинается с номера главы/пункта (например, "16.8" или "Глава 3")
+                    is_heading = (max_font_size > 11.5 or is_bold) and len(block_text) < 100
+                    match_section_num = re.match(r'^(\d+(\.\d+)*)\s+[А-ЯA-Z]', block_text)
+
+                    if is_heading or match_section_num:
+                        current_section = block_text
+                        continue # заголовок вынесли в контекст, сам по себе он чанком не будет
+
+                    # Очищаем текст блока от артефактов
+                    cleaned_block = self.clean_pdf_text(block_text)
+
+                    if cleaned_block:
+                        #добавляем контекст заголовка к каждому блоку текста
+                        enriched_block = f"[Раздел: {current_section}]\n{cleaned_block}"
+                        page_text_blocks.append(enriched_block)
+
+            #Собираем все обогащенные блоки страницы в единый текст для сплиттера
+            page_full_text = "\n\n".join(page_text_blocks)
+            
+            if not page_full_text.strip():
+                continue
+
+            #Нарезка через LangChain с учетом контекста разделов
+            chunks = self.text_splitter.create_documents(
+                texts=[page_full_text],
+                metadatas=[{"source": file_path.name, "page": page_num + 1}]
+            )
+
+            #Преобразование объектов LangChain в удобный формат словарей с ID
+            for i, chunk in enumerate(chunks):
+                processed_chunks.append({
+                    "content": chunk.page_content, #достаем конкретно саму строку текста из объекта, а не сам ланг чейн объект
+                    "metadata": {
+                        "source": file_path.name, #имя файла
+                        "page": page_num + 1, #номер страницы
+                        "chunk_id": len(processed_chunks)
+                    }
+                })
+
+        if not processed_chunks:
+            print(f"Внимание: в файле {file_path.name} не удалось извлечь структурированный текст.")
             
         return processed_chunks
-
     
