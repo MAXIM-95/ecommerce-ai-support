@@ -137,51 +137,61 @@ class VectorStoreManager:
             print("Индекс BM25 не инициализирован. Сначала добавьте чанки через add_chunks.")
             return []
 
-        #ШАГ 1: BM25 поиск (по ключевым словам)
+        # ШИРОКИЙ ПОИСК: увеличиваем коэффициент захвата кандидатов (например, в 5 раз)
+        fetch_limit = top_k * 5
+
+        # ШАГ 1: BM25 поиск (по ключевым словам)
         tokenized_query = query.lower().split(" ")
         bm25_scores = self.bm25.get_scores(tokenized_query)
-        #Получаем индексы топ-элементов по BM25 (берем с запасом, например, top_k * 2)
-        bm25_top_indices = sorted(range(len(bm25_scores)), key=lambda i: bm25_scores[i], reverse=True)[:top_k * 2]
+        bm25_top_indices = sorted(range(len(bm25_scores)), key=lambda i: bm25_scores[i], reverse=True)[:fetch_limit]
         
-        #ШАГ 2: Dense поиск (векторный через Qdrant)
+        # ШАГ 2: Dense поиск (векторный через Qdrant)
         query_vector = self.encoder.encode(query).tolist()
         qdrant_results = self.client.query_points(
             collection_name=self.collection_name,
             query=query_vector,
-            limit=top_k * 2
+            limit=fetch_limit
         ).points
 
-        #Собираем кандидатов в единый словарь по тексту, чтобы избежать дубликатов
+        # Собираем кандидатов в единый словарь по тексту
         candidates = {}
 
-        #Добавляем результаты BM25
         for idx in bm25_top_indices:
-            chunk = self.all_chunks[idx]
-            candidates[chunk["content"]] = {
-                "content": chunk["content"],
-                "metadata": chunk["metadata"],
-                "source": "bm25"
-            }
+            score = bm25_scores[idx]
+            if score > 0.0:  # берем любые ненулевые совпадения
+                chunk = self.all_chunks[idx]
+                candidates[chunk["content"]] = {
+                    "content": chunk["content"],
+                    "metadata": chunk["metadata"],
+                    "source": "bm25",
+                    "raw_score": float(score)
+                }
 
-        #Добавляем результаты Qdrant
         for point in qdrant_results:
             content = point.payload.get("content", "")
+            q_score = point.score if hasattr(point, 'score') else 0.0
             metadata = {k: v for k, v in point.payload.items() if k != "content"}
+            
             if content in candidates:
                 candidates[content]["source"] = "hybrid"
             else:
                 candidates[content] = {
                     "content": content,
                     "metadata": metadata,
-                    "source": "vector"
+                    "source": "vector",
+                    "raw_score": float(q_score)
                 }
 
         candidate_list = list(candidates.values())
+        print(f" >>> Всего уникальных кандидатов собрано для реранкинга: {len(candidate_list)} <<<")
+
         if not candidate_list:
             return []
 
-        #ШАГ 3: Cross-Encoder Reranking (финальная точная сортировка)
-        #Инициализируем легкий реранкер (при первом вызове скачает небольшую модель)
+        # ЖЕСТКОЕ ОГРАНИЧЕНИЕ: берем для реранкера не больше 10-12 штук, чтобы не вешать CPU
+        candidate_list = candidate_list[:12]
+
+        # ШАГ 3: Cross-Encoder Reranking
         try:
             from sentence_transformers import CrossEncoder
             if not hasattr(self, "_reranker"):
@@ -193,10 +203,14 @@ class VectorStoreManager:
             for i, item in enumerate(candidate_list):
                 item["score"] = float(ranks[i])
 
-            #Сортируем по оценке реранкера в порядке убывания
             candidate_list = sorted(candidate_list, key=lambda x: x["score"], reverse=True)
+            
+            # Отладочный вывод топ-3 после реранкинга
+            print(" >>> Топ-3 чанка после реранкинга:")
+            for i, item in enumerate(candidate_list[:3]):
+                print(f"   [{i+1}] score={item['score']:.2f} | текст: {item['content'][:120]}...")
+
         except Exception as e:
             print(f"Ошибка реранкинга (возвращаем без него): {e}")
 
-        #Возвращаем топ результатов после реранкинга
-        return candidate_list[:rerank_top_k]    
+        return candidate_list[:rerank_top_k]

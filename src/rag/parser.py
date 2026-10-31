@@ -14,15 +14,21 @@ class PDFParser:
             separators=["\n\n", "\n", " ", ""]
         )
 
-    #функция извлечения всего текста из PDF-файла
-    #def extract_text_from_pdf(self, pdf_path: str | Path) -> str:
-    #    reader = PdfReader(pdf_path)
-    #    full_text = ""
-    #    for page in reader.pages:
-    #        text = page.extract_text()
-    #        if text:
-    #            full_text += f"\n{text}"
-    #    return full_text
+    def clean_pdf_text(self, text: str) -> str:
+        #Универсальная очистка текста от артефактов PDF-парсера:
+        #- склеивает слова, разорванные дефисами на стыках строк (например, "монта-жу" -> "монтажу")
+        #- убирает лишние пробелы и дублирующиеся переносы строк
+        
+        #1) убираем переносы через дефис
+        text = re.sub(r'(\w+)-\s*\n\s*(\w+)', r'\1\2', text)
+        
+        #2) убираем множественные пробелы и табуляцию
+        text = re.sub(r'[ \t]+', ' ', text)
+        
+        #3) нормализуем пустые строки
+        text = re.sub(r'\n\s*\n', '\n\n', text)
+        
+        return text.strip()
 
     #Читает PDF, извлекает текст и разбивает его на чанки с сохранением метаданных
     def process_pdf(self, file_path: Path) -> List[Dict[str, Any]]:
@@ -42,9 +48,12 @@ class PDFParser:
             print(f"Внимание: в файле {file_path.name} не удалось извлечь текст (возможно, нужна OCR).")
             return []
 
+        #КРИТИЧЕСКИ ВАЖНО: очищаем весь сырой текст от артефактов перед нарезкой
+        cleaned_full_text = self.clean_pdf_text(full_text)
+
         #Нарезка текста с помощью LangChain
         chunks = self.text_splitter.create_documents( #в chunks будет список объектов класса Documents из LangChain
-            texts=[full_text],
+            texts=[cleaned_full_text],
             metadatas=[{"source": file_path.name}]
         )
 
