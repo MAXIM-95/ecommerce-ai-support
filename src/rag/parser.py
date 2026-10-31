@@ -1,4 +1,5 @@
 from pathlib import Path
+import re #регулярные выражения
 import pymupdf as fitz
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from typing import List, Dict, Any
@@ -61,7 +62,7 @@ class PDFParser:
         processed_chunks = []
         for i, chunk in enumerate(chunks):
             processed_chunks.append({
-                "content": chunk,
+                "content": chunk.page_content, #достаем конкретно саму строку текста из объекта, а не сам ланг чейн объект
                 "metadata": {
                     "source": file_path.name,
                     "chunk_id": i
