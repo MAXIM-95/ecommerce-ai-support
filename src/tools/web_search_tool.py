@@ -1,3 +1,4 @@
+import traceback
 from duckduckgo_search import DDGS
 
 #Выполняет поиск в интернете по внешним источникам и сайтам.
@@ -15,21 +16,27 @@ def web_search(query: str) -> str:
     print(f"\n >>> АГЕНТ ВЫЗВАЛ web_search с запросом: '{query}' <<<\n")
     
     try:
-        results = list(DDGS().text(query, max_results=3))
+       # Используем обновленный интерфейс DDGS
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=3))
+            
         if not results:
             return "В интернете не удалось найти информацию по данному запросу."
-
+            
+        # Форматируем полученные результаты в читаемый текст для LLM
         formatted_results = []
-        for i, res in enumerate(results, 1): #пробегаемся по каждому найденному сайту
-            title = res.get("title", "") #извлекаем заголовок статьи
-            snippet = res.get("body", "") #сниппет
-            url = res.get("href", "") #прямая ссылка на сайт
-            formatted_results.append(f"--- Результат из веб-поиска #{i} ---\nЗаголовок: {title}\nОписание: {snippet}\nСсылка: {url}\n")
-
-        return "\n".join(formatted_results)
+        for r in results: #пробегаемся по каждому найденному сайту
+            title = r.get("title", "") #извлекаем заголовок статьи
+            snippet = r.get("body", "") #сниппет
+            link = r.get("href", "") #прямая ссылка на сайт
+            formatted_results.append(f"Заголовок: {title}\nИнформация: {snippet}\nСсылка: {link}")
+            
+        return "\n\n".join(formatted_results)
 
     except Exception as e:
-        return f"Ошибка при выполнении веб-поиска: {e}"
+        print(f"Ошибка при выполнении Web Search: {e}")
+        print(traceback.format_exc())
+        return "Не удалось получить свежие данные из интернета из-за сетевого сбоя или блокировки поисковика!"
 
 if __name__ == "__main__":
     #Тест
