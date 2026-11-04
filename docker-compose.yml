@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: local_ai_app
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data:/app/data                  # Сохраняет SQLite БД
+      - ./qdrant_storage:/app/qdrant_storage  # Сохраняет векторный индекс Qdrant на хост
+    restart: unless-stopped

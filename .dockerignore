@@ -1,0 +1,24 @@
+# Игнорируем виртуальные окружения и системный мусор
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+env/
+venv/
+.env
+
+# Локальные базы данных (чтобы не перезаписывать persistent-том при сборке)
+qdrant_storage/
+data/
+*.db
+*.sqlite3
+
+# Кэш и служебные директории IDE и Docker
+.git/
+.gitignore
+.vscode/
+.idea/
+docker-compose.yml
+Dockerfile
+README.md

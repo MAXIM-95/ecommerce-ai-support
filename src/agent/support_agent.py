@@ -16,8 +16,8 @@ from src.tools.web_search_tool import web_search #поиск в интернет
 load_dotenv()
 
 #Проверяем, задан ли ключ для Groq (если ключа нет, то сразу выдаем ошибку)
-if not os.getenv("GOOGLE_API_KEY"):
-    raise ValueError("Не найден GOOGLE_API_KEY в переменных окружения (.env)!")
+#if not os.getenv("GOOGLE_API_KEY"):
+#    raise ValueError("Не найден GOOGLE_API_KEY в переменных окружения (.env)!")
 
 #Инициализируем языковую модель Llama 3.3 через Groq
 #параметр temperature=0 делает поведение агента более точным и логичным при выборе инструментов (запрещаем агенту излишне фантазировать)
