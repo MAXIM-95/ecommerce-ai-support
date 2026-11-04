@@ -1,65 +1,20 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import List, Dict, Any
+from fastapi import FastAPI
+from src.config import settings
+from src.api.chat import router as chat_router
 
-# Импортирую своего готового агента
-from src.agent.support_agent import agent_executor  
-
-#экземпляр FastAPI приложения
+# Экземпляр FastAPI приложения
 app = FastAPI(
     title="E-commerce AI Support API",
-    description="API для умной техподдержки и консультанта на базе LangGraph и Gemini",
+    description="API для умной техподдержки и консультанта на базе LangGraph и Ollama",
     version="1.0.0"
 )
 
-class ChatRequest(BaseModel): #модель входящего запроса
-    message: str
-    history: List[Dict[str, Any]] = []
+# Подключаем роутеры из папки api
+app.include_router(chat_router)
 
-class ChatResponse(BaseModel): #модель ответа сервера
-    response: str
-    history: List[Dict[str, Any]]
-
-@app.get("/") #корневой get-endpoint
+@app.get("/")
 def read_root():
-    return {"status": "active", "service": "E-commerce AI Support Agent"}
-
-@app.post("/chat", response_model=ChatResponse) #основной POST-endpoint
-def chat_endpoint(request: ChatRequest):
-    try:
-        #Формируем сообщения для графа агента
-        #Превращаем историю в формат, который ожидает LangGraph
-        messages = []
-        for h in request.history:
-            if h.get("role") == "user":
-                messages.append(("user", h["content"]))
-            elif h.get("role") == "assistant":
-                messages.append(("assistant", h["content"]))
-        
-        # Добавляем текущее сообщение пользователя
-        messages.append(("user", request.message))
-        
-        # Запускаем агента
-        result = agent_executor.invoke({"messages": messages})
-        
-        # Достаем последнее сообщение от ассистента
-        last_message = result["messages"][-1]
-        agent_reply = getattr(last_message, "content", str(last_message))
-        
-        # Обновляем историю для клиента
-        updated_history = request.history + [
-            {"role": "user", "content": request.message},
-            {"role": "assistant", "content": agent_reply}
-        ]
-        
-        return ChatResponse(
-            response=agent_reply,
-            history=updated_history
-        )
-
-    #обработка ошибки    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "active", "service": settings.PROJECT_NAME}
 
 if __name__ == "__main__":
     import uvicorn

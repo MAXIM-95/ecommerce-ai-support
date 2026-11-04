@@ -5,17 +5,21 @@ from qdrant_client.http import models
 from sentence_transformers import SentenceTransformer
 from rank_bm25 import BM25Okapi
 
+#конфиг с настройками
+from src.config import settings
+
 class VectorStoreManager:
-    def __init__(self, collection_name: str = "support_docs", model_name: str = "all-MiniLM-L6-v2"):
-        self.collection_name = collection_name
+    def __init__(self, collection_name: str = None, model_name: str = None):
+        self.collection_name = collection_name or settings.QDRANT_COLLECTION
+        model_name = model_name or settings.EMBEDDING_MODEL
         
-        #Загружаем локальную модель для эмбеддингов (легкая и быстрая)
+        #Загружаем локальную модель для эмбеддингов (легкая и быстрая), которая прописана в конфиге
         print(f"Загружаем модель эмбеддингов: {model_name}...")
         self.encoder = SentenceTransformer(model_name)
         self.vector_size = self.encoder.get_sentence_embedding_dimension()
 
-        #Инициализируем локальный Qdrant (данные будут сохраняться в папку qdrant_storage)
-        self.client = QdrantClient(path="./qdrant_storage")
+        #Инициализируем локальный Qdrant, берем путь из централизованного конфига
+        self.client = QdrantClient(path=settings.QDRANT_PATH)
         
         #Создаем коллекцию, если она еще не существует
         self._init_collection()
